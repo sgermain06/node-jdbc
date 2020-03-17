@@ -1,6 +1,6 @@
 var nodeunit = require('nodeunit');
 var jinst = require('../lib/jinst');
-var dm = require('../lib/drivermanager.js');
+var dm = require('../lib/driverManager.js');
 var java = jinst.getInstance();
 
 if (!jinst.isJvmCreated()) {
