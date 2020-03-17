@@ -2,7 +2,7 @@ const JDBC = require('../lib/jdbc');
 const jinst = require('../lib/jinst');
 
 const config = {
-    url: 'jdbc:hive2://naus-vps-hdfs01:10000/vortex_accounting',
+    url: 'jdbc:hive2://localhost:10000/database_name',
     driverName: 'org.apache.hive.jdbc.HiveDriver',
     minPoolSize: 1,
     maxPoolSize: 10
@@ -22,7 +22,7 @@ const config = {
 
     const reservedInstance = await jdbc.reserve();
 
-    const query = 'SELECT * FROM counts LIMIT 1';
+    const query = 'SELECT * FROM table LIMIT 1';
     const statement = await reservedInstance.conn.createStatement();
     const resultSet = await statement.executeQuery(query);
 
