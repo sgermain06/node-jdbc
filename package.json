@@ -12,8 +12,7 @@
   "devDependencies": {
     "jshint": "~2.11.0",
     "lolex": "^5.1.2",
-    "nodeunit": "~0.11.3",
-    "q": "^1.5.1"
+    "nodeunit": "~0.11.3"
   },
   "scripts": {
     "pretest": "bash bin/startdbs",
@@ -23,7 +22,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git://github.com/CraZySacX/node-jdbc.git"
+    "url": "git://github.com/sgermain06/node-jdbc.git"
   },
   "directories": {
     "doc": ".",
