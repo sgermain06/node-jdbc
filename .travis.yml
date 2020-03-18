@@ -18,4 +18,5 @@ before_script:
   - node --version
   - npm install
 script:
+  - npm run lint
   - npm test
