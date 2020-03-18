@@ -1,7 +1,5 @@
-var nodeunit = require('nodeunit');
-var jinst = require('../lib/jinst');
-var JDBC = require('../lib/jdbc');
-var asyncjs = require('async');
+const jinst = require('../lib/jinst');
+const JDBC = require('../lib/jdbc');
 
 if (!jinst.isJvmCreated()) {
   jinst.addOption("-Xrs");
@@ -11,161 +9,127 @@ if (!jinst.isJvmCreated()) {
     './drivers/derbytools.jar']);
 }
 
-var derby = new JDBC({
+const derby = new JDBC({
   url: 'jdbc:derby://localhost:1527/testdb;create=true'
 });
 
-var testconn = null;
+let testConn = null;
 
 module.exports = {
-  setUp: function (callback) {
-    if (testconn === null && derby._pool.length > 0) {
-      derby.reserve(function (err, conn) {
-        testconn = conn;
+    setUp: async function (callback) {
+        if (testConn === null && derby.pool.length > 0) {
+            testConn = await derby.reserve();
+        }
         callback();
-      });
-    } else {
-      callback();
-    }
-  },
-  tearDown: function (callback) {
-    if (testconn) {
-      derby.release(testconn, function () {
+    },
+    tearDown: async function (callback) {
+        if (testConn) {
+            await derby.release(testConn);
+        }
         callback();
-      });
-    } else {
-      callback();
-    }
-  },
-  testinitialize: function (test) {
-    derby.initialize(function (err) {
-      test.expect(1);
-      test.equal(err, null);
-      test.done();
-    });
-  },
-  testcreatetable: function (test) {
-    testconn.conn.createStatement(function (err, statement) {
-      if (err) {
-        console.log(err);
-      } else {
-        var create = "CREATE TABLE blahMax ";
-        create += "(id int, name varchar(10), date DATE, time TIME, timestamp TIMESTAMP)";
-        statement.executeUpdate(create, function (err) {
-          test.expect(1);
-          test.equal(null, err);
-          test.done();
-        });
-      }
-    });
-  },
-  testMultipleInserts: function (test) {
-    testconn.conn.createStatement(function (err, statement) {
-      if (err) {
-        console.log(err);
-      } else {
-        asyncjs.times(50, function (n, next) {
-            var insert = "INSERT INTO blahMax VALUES " +
-              "(" + n + ", 'Jason_" + n + "', CURRENT_DATE, CURRENT_TIME, CURRENT_TIMESTAMP)";
-
-            statement.executeUpdate(insert, function (err, result) {
-              next(err, result);
-            });
-          },
-          function (err, results) {
-            if (err)
-              console.log(err);
-            else {
-              test.expect(3);
-              test.equal(null, err);
-              test.equal(50, results.length);
-              test.ok(results);
-              test.done();
+    },
+    testinitialize: async function (test) {
+        const result = await derby.initialize();
+        test.expect(1);
+        test.equal(result, null);
+        test.done();
+    },
+    testcreatetable: async function (test) {
+        try {
+            const statement = await testConn.conn.createStatement();
+            const create = 'CREATE TABLE fakeMax (id int, name varchar(10), date DATE, time TIME, timestamp TIMESTAMP)';
+            const result = await statement.executeUpdate(create);
+            test.expect(1);
+            test.equal(0, result);
+            test.done();
+        }
+        catch (err) {
+            console.log(err);
+        }
+    },
+    testMultipleInserts: async function (test) {
+        try {
+            const statement = await testConn.conn.createStatement();
+            const results = [];
+            for (let i = 0; i < 50; i++) {
+                results.push(await statement.executeUpdate(
+                    `INSERT INTO fakeMax VALUES (${i}, 'Jason_${i}', CURRENT_DATE, CURRENT_TIME, CURRENT_TIMESTAMP)`));
             }
-          });
-      }
-    });
-  },
-  testselect: function (test) {
-    testconn.conn.createStatement(function (err, statement) {
-      if (err) {
-        console.log(err);
-      } else {
-        statement.executeQuery("SELECT * FROM blahMax", function (err, resultset) {
-          test.expect(7);
-          test.equal(null, err);
-          test.ok(resultset);
-          resultset.toObjArray(function (err, results) {
+            test.expect(3);
+            test.ok(statement);
+            test.equal(50, results.length);
+            test.ok(results);
+            test.done();
+        }
+        catch (err) {
+            console.log(err);
+        }
+    },
+    testselect: async function (test) {
+        try {
+            const statement = await testConn.conn.createStatement();
+            const resultSet = await statement.executeQuery('SELECT * FROM fakeMax');
+            test.expect(7);
+            test.ok(statement);
+            test.ok(resultSet);
+            const results = await resultSet.toObjArray();
             test.equal(results.length, 50);
             test.equal(results[0].NAME, 'Jason_0');
             test.ok(results[0].DATE);
             test.ok(results[0].TIME);
             test.ok(results[0].TIMESTAMP);
             test.done();
-          });
-        });
-      }
-    });
-  },
-  testselectWithMax10Rows: function (test) {
-    testconn.conn.createStatement(function (err, statement) {
-      if (err) {
-        console.log(err);
-      } else {
-        statement.setMaxRows(10, function (err) {
-          if (err) {
+        }
+        catch (err) {
             console.log(err);
-          } else {
-            statement.executeQuery("SELECT * FROM blahMax", function (err, resultset) {
-              test.expect(4);
-              test.equal(null, err);
-              test.ok(resultset);
-              resultset.toObjArray(function (err, results) {
-                test.equal(results.length, 10);
-                test.equal(results[0].NAME, 'Jason_0');
-                test.done();
-              });
-            });
-          }
-        })
-      }
-    });
-  },
-  testselectWithMax70Rows: function (test) {
-    testconn.conn.createStatement(function (err, statement) {
-      if (err) {
-        console.log(err);
-      } else {
-        statement.setMaxRows(70, function (err) {
-          if (err) {
+        }
+    },
+    testselectWithMax10Rows: async function (test) {
+        try {
+            const statement = await testConn.conn.createStatement();
+            const command = await statement.setMaxRows(10);
+            const resultSet = await statement.executeQuery('SELECT * FROM fakeMax');
+            test.expect(5);
+            test.equal(null, command);
+            test.ok(statement);
+            test.ok(resultSet);
+            const results = await resultSet.toObjArray();
+            test.equal(results.length, 10);
+            test.equal(results[0].NAME, 'Jason_0');
+            test.done();
+        }
+        catch (err) {
             console.log(err);
-          } else {
-            statement.executeQuery("SELECT * FROM blahMax", function (err, resultset) {
-              test.expect(4);
-              test.equal(null, err);
-              test.ok(resultset);
-              resultset.toObjArray(function (err, results) {
-                test.equal(results.length, 50);
-                test.equal(results[0].NAME, 'Jason_0');
-                test.done();
-              });
-            });
-          }
-        })
-      }
-    });
-  },
-  testdroptable: function (test) {
-    testconn.conn.createStatement(function (err, statement) {
-      if (err) {
-        console.log(err);
-      } else {
-        statement.executeUpdate("DROP TABLE blahMax", function (err) {
-          test.expect(1);
-          test.equal(null, err);
-          test.done();
-        });
-      }
-    });
-  }
+        }
+    },
+    testselectWithMax70Rows: async function (test) {
+        try {
+            const statement = await testConn.conn.createStatement();
+            const command = await statement.setMaxRows(70);
+            const resultSet = await statement.executeQuery('SELECT * FROM fakeMax');
+            test.expect(5);
+            test.equal(null, command);
+            test.ok(statement);
+            test.ok(resultSet);
+            const results = await resultSet.toObjArray();
+            test.equal(results.length, 50);
+            test.equal(results[0].NAME, 'Jason_0');
+            test.done();
+        }
+        catch (err) {
+            console.log(err);
+        }
+    },
+    testdroptable: async function (test) {
+        try {
+            const statement = await testConn.conn.createStatement();
+            const result = await statement.executeUpdate('DROP TABLE fakeMax');
+            test.expect(1);
+            test.equal(result, 0);
+            test.done();
+        }
+        catch (err) {
+            console.log(err);
+        }
+    }
 };

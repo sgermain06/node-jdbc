@@ -1,9 +1,6 @@
-var _ = require('lodash');
-var asyncjs = require('async');
-var nodeunit = require('nodeunit');
-var jinst = require('../lib/jinst');
-var Pool = require('../lib/pool');
-var java = jinst.getInstance();
+const jinst = require('../lib/jinst');
+const Pool = require('../lib/pool');
+const isNil = require('lodash/isNil');
 
 if (!jinst.isJvmCreated()) {
   jinst.addOption("-Xrs");
@@ -13,84 +10,82 @@ if (!jinst.isJvmCreated()) {
                         './drivers/derbytools.jar']);
 }
 
-var config = {
+const config = {
   url: 'jdbc:hsqldb:hsql://localhost/xdb',
   user : 'SA',
   password: '',
-  minpoolsize: 2,
-  maxpoolsize: 3
+  minPoolSize: 2,
+  maxPoolSize: 3
 };
 
+let testPool;
+
 module.exports = {
-  setUp: function(callback) {
-    testpool = new Pool(config);
-    testpool.initialize(function(err) {
-      callback();
-    });
-  },
-  tearDown: function(callback) {
-    testpool = null;
-    callback();
-  },
-  teststatus: function(test) {
-    testpool.reserve(function(err) {
-      testpool.status(function(err, status) {
+    setUp: async function(callback) {
+        testPool = new Pool(config);
+        await testPool.initialize();
+        callback();
+    },
+    tearDown: function(callback) {
+        testPool = null;
+        callback();
+    },
+    teststatus: async function(test) {
+        await testPool.reserve();
+        const status = await testPool.status();
         test.expect(2);
         test.equal(status.available, 1);
         test.equal(status.reserved, 1);
         test.done();
-      });
-    });
-  },
-  testreserverelease: function(test) {
-    testpool.reserve(function(err, conn) {
-      testpool.release(conn, function(err, conn) {
-        test.expect(3);
-        test.equal(null, err);
-        test.equal(testpool._pool.length, 2);
-        test.equal(testpool._reserved.length, 0);
+    },
+    testreserverelease: async function(test) {
+        const connection = await testPool.reserve();
+        await testPool.release(connection);
+        test.expect(2);
+        test.equal(testPool.pool.length, 2);
+        test.equal(testPool.reserved.length, 0);
         test.done();
-      });
-    });
-  },
-  testreservepastmin: function(test) {
-    asyncjs.times(3, function(n, next) {
-      testpool.reserve(function(err, conn) {
-        next(err, conn);
-      });
-    }, function(err, results) {
-      test.expect(2);
-      test.equal(testpool._pool.length, 0);
-      test.equal(testpool._reserved.length, 3);
-      _.each(results, function(conn) {
-        testpool.release(conn, function(err) {});
-      });
-      test.done();
-    });
-  },
-  testovermax: function(test) {
-    asyncjs.times(4, function(n, next) {
-      testpool.reserve(function(err, conn) {
-        next(err, conn);
-      });
-    }, function(err, results) {
-      test.expect(3);
-      test.ok(err);
-      test.equal(testpool._reserved.length, 3);
-      test.equal(testpool._pool.length, 0);
-      _.each(results, function(conn) {
-        testpool.release(conn, function(err) {});
-      });
-      test.done();
-    });
-  },
-  testpurge: function(test) {
-    testpool.purge(function(err) {
-      test.expect(3);
-      test.equal(null, err);
-      test.equal(testpool._pool.length, 0);
-      test.equal(testpool._reserved.length, 0);
-      test.done();
-    });
-  },
+    },
+    testreservepastmin: async function(test) {
+        const results = [];
+        for (let i = 0; i < 3; i++) {
+            results.push(await testPool.reserve());
+        }
+        test.expect(2);
+        test.equal(testPool.pool.length, 0);
+        test.equal(testPool.reserved.length, 3);
+        for (let conn of results) {
+            await testPool.release(conn);
+        }
+        test.done();
+    },
+    testovermax: async function(test) {
+        const results = [];
+        try {
+            for (let i = 0; i < 4; i++) {
+                results.push(await testPool.reserve());
+            }
+        }
+        catch (err) {
+            test.expect(3);
+            test.equal(testPool.pool.length, 0);
+            test.equal(testPool.reserved.length, 3);
+            test.equal(err.message, 'No more pool connections available.');
+        }
+        finally {
+            for (let conn of results) {
+                if (!isNil(conn)) {
+                    await testPool.release(conn);
+                }
+            }
+            test.done();
+        }
+    },
+    testpurge: async function(test) {
+        await testPool.purge();
+        test.expect(2);
+        test.equal(testPool.pool.length, 0);
+        test.equal(testPool.reserved.length, 0);
+        test.done();
+    },
 };

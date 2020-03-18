@@ -1,6 +1,5 @@
-var nodeunit = require('nodeunit');
-var jinst = require('../lib/jinst');
-var JDBC = require('../lib/jdbc');
+const jinst = require('../lib/jinst');
+const JDBC = require('../lib/jdbc');
 
 if (!jinst.isJvmCreated()) {
   jinst.addOption("-Xrs");
@@ -10,7 +9,7 @@ if (!jinst.isJvmCreated()) {
                         './drivers/derbytools.jar']);
 }
 
-var config = {
+const config = {
   url: 'jdbc:hsqldb:hsql://localhost/xdb',
   drivername: 'org.hsqldb.jdbc.JDBCDriver',
   user: 'SA',
@@ -18,315 +17,218 @@ var config = {
   minpoolsize: 10
 };
 
-var hsqldb = new JDBC(config);
-var testconn = null;
-var testDate = Date.now();
+const hsqldb = new JDBC(config);
+let testConn = null;
+const testDate = Date.now();
 
 module.exports = {
-  setUp: function(callback) {
-    if (testconn === null && hsqldb._pool.length > 0) {
-      hsqldb.reserve(function(err, conn) {
-        testconn = conn;
+    setUp: async function(callback) {
+        if (testConn === null && hsqldb.pool.length > 0) {
+            testConn = await hsqldb.reserve();
+        }
         callback();
-      });
-    } else {
-      callback();
-    }
-  },
-  tearDown: function(callback) {
-    if (testconn) {
-      hsqldb.release(testconn, function(err) {
+    },
+    tearDown: async function(callback) {
+        if (testConn) {
+            await hsqldb.release(testConn);
+        }
         callback();
-      });
-    } else {
-      callback();
-    }
-  },
-  testinitialize: function(test) {
-    hsqldb.initialize(function(err) {
-      test.expect(1);
-      test.equal(null, err);
-      test.done();
-    });
-  },
-  testcreatetable: function(test) {
-    testconn.conn.createStatement(function(err, statement) {
-      if (err) {
-        console.log(err);
-      } else {
-        statement.executeUpdate("CREATE TABLE blah (id int, name varchar(10), date DATE, time TIME, timestamp TIMESTAMP);", function(err, result) {
-          test.expect(2);
-          test.equal(null, err);
-          test.equal(0, result);
-          statement.close(function(err) {
-            if (err) {
-              console.log(err);
-            } else {
-              test.done();
-            }
-          });
-        });
-      }
-    });
-  },
-  testinsert: function(test) {
-    testconn.conn.createStatement(function(err, statement) {
-      if (err) {
-        console.log(err);
-      } else {
-        statement.executeUpdate("INSERT INTO blah VALUES (1, 'Jason', CURRENT_DATE, CURRENT_TIME, CURRENT_TIMESTAMP);", function(err, result) {
-          test.expect(2);
-          test.equal(null, err);
-          test.ok(result && result == 1);
-          test.done();
-        });
-      }
-    });
-  },
-  testupdate: function(test) {
-    testconn.conn.createStatement(function(err, statement) {
-      if (err) {
-        console.log(err);
-      } else {
-        statement.executeUpdate("UPDATE blah SET id = 2 WHERE name = 'Jason';", function(err, result) {
-          test.expect(2);
-          test.equal(null, err);
-          test.ok(result && result == 1);
-          test.done();
-        });
-      }
-    });
-  },
-  testselect: function(test) {
-    testconn.conn.createStatement(function(err, statement) {
-      if (err) {
-        console.log(err);
-      } else {
-        statement.executeQuery("SELECT * FROM blah;", function(err, resultset) {
-          test.expect(7);
-          test.equal(null, err);
-          test.ok(resultset);
-          resultset.toObjArray(function(err, results) {
+    },
+    testinitialize: async function(test) {
+        try {
+            const result = await hsqldb.initialize();
+            test.expect(1);
+            test.equal(null, result);
+            test.done();
+        }
+        catch (err) {
+            console.log(err);
+        }
+    },
+    testcreatetable: async function(test) {
+        try {
+            const statement = await testConn.conn.createStatement();
+            const create = 'CREATE TABLE fake (id int, bi bigint, name varchar(10), date DATE, time TIME, timestamp TIMESTAMP)';
+            const result = await statement.executeUpdate(create);
+            test.expect(1);
+            test.equal(0, result);
+            test.done();
+        }
+        catch (err) {
+            console.log(err);
+        }
+    },
+    testinsert: async function(test) {
+        try {
+            const statement = await testConn.conn.createStatement();
+            const insert = 'INSERT INTO fake VALUES (1, 9223372036854775807, \'Jason\', CURRENT_DATE, CURRENT_TIME, CURRENT_TIMESTAMP)';
+            const result = await statement.executeUpdate(insert);
+            test.expect(2);
+            test.equal(1, result);
+            test.ok(result);
+            test.done();
+        }
+        catch (err) {
+            console.log(err);
+        }
+    },
+    testupdate: async function(test) {
+        try {
+            const statement = await testConn.conn.createStatement();
+            const result = await statement.executeUpdate('UPDATE fake SET id = 2 WHERE name = \'Jason\'');
+            test.expect(2);
+            test.equal(1, result);
+            test.ok(result);
+            test.done();
+        }
+        catch (err) {
+            console.log(err);
+        }
+    },
+    testselect: async function(test) {
+        try {
+            const statement = await testConn.conn.createStatement();
+            const resultSet = await statement.executeQuery('SELECT * FROM fake');
+            test.expect(7);
+            test.ok(resultSet);
+            const results = await resultSet.toObjArray();
             test.equal(results.length, 1);
+            test.equal(results[0].BI, '9223372036854775807');
             test.equal(results[0].NAME, 'Jason');
             test.ok(results[0].DATE);
             test.ok(results[0].TIME);
             test.ok(results[0].TIMESTAMP);
             test.done();
-          });
-        });
-      }
-    });
-  },
-  testpreparedselectsetint: function(test) {
-    testconn.conn.prepareStatement("SELECT * FROM blah WHERE id=?",function(err, statement) {
-      if (err) {
-        console.log(err);
-      } else {
-        statement.setInt(1,2, function(err) {
-          if (err) {
+        }
+        catch (err) {
             console.log(err);
-          }
-          else {
-            statement.executeQuery(function(err, resultset) {
-              test.expect(3);
-              test.equal(null, err);
-              test.ok(resultset);
-              resultset.toObjArray(function(err, results) {
-                test.equal(results.length, 1);
-                test.done();
-              });
-            });
-          }
-        });
-      }
-    });
-  },
-  testpreparedselectsetstring: function(test) {
-    testconn.conn.prepareStatement("SELECT * FROM blah WHERE name=?",function(err, statement) {
-      if (err) {
-        console.log(err);
-      } else {
-        statement.setString(1,'Jason', function(err) {
-          if (err) {
+        }
+    },
+    testpreparedselectsetstring: async function(test) {
+        try {
+            const statement = await testConn.conn.prepareStatement('SELECT * FROM fake WHERE name=?');
+            const command = await statement.setString(1, 'Jason');
+            const resultSet = await statement.executeQuery();
+            test.expect(3);
+            test.equal(null, command);
+            test.ok(resultSet);
+            const results = await resultSet.toObjArray();
+            test.equal(results.length, 1);
+            test.done();
+        }
+        catch (err) {
             console.log(err);
-          }
-          else {
-            statement.executeQuery(function(err, resultset) {
-              test.expect(3);
-              test.equal(null, err);
-              test.ok(resultset);
-              resultset.toObjArray(function(err, results) {
-                test.equal(results.length, 1);
-                test.done();
-              });
-            });
-          }
-        });
-      }
-    });
-  },
-  testpreparedinsertsetdate: function(test) {
-    var myjava = jinst.getInstance();
-    testconn.conn.prepareStatement("INSERT INTO blah (id,name,date) VALUES (3,'Test',?)",function(err, statement) {
-      if (err) {
-        console.log(err);
-      } else {
-        var sqlDate = myjava.newInstanceSync("java.sql.Date", myjava.newLong(testDate));
-        statement.setDate(1, sqlDate, null, function(err) {
-          if (err) {
+        }
+    },
+    testpreparedselectsetint: async function(test) {
+        try {
+            const statement = await testConn.conn.prepareStatement('SELECT * FROM fake WHERE id=?');
+            const command = await statement.setInt(1, 2);
+            const resultSet = await statement.executeQuery();
+            test.expect(3);
+            test.equal(null, command);
+            test.ok(resultSet);
+            const results = await resultSet.toObjArray();
+            test.equal(results.length, 1);
+            test.done();
+        }
+        catch (err) {
             console.log(err);
-          }
-          else {
-            statement.executeUpdate(function(err, numrows) {
-              if (err) {
-                console.log(err);
-              } else {
-                test.expect(2);
-                test.equal(null, err);
-                test.equal(1,numrows);
-                test.done();
-              }
-            });
-          }
-        });
-      }
-    });
-  },
-  testpreparedselectsetdate: function(test) {
-    var myjava = jinst.getInstance();
-    testconn.conn.prepareStatement("SELECT * FROM blah WHERE id = 3 AND date = ?",function(err, statement) {
-      if (err) {
-        console.log(err);
-      } else {
-        var sqlDate = myjava.newInstanceSync("java.sql.Date", myjava.newLong(testDate));
-        statement.setDate(1, sqlDate, null, function(err) {
-          if (err) {
+        }
+    },
+    testpreparedinsertsetdate: async function(test) {
+        try {
+            const myJava = jinst.getInstance();
+            const sqlDate = myJava.newInstanceSync('java.sql.Date', myJava.newLong(testDate));
+
+            const statement = await testConn.conn.prepareStatement('INSERT INTO fake (id,name,date) VALUES (3,\'Test\',?)');
+            const command = await statement.setDate(1, sqlDate, null);
+            const count = await statement.executeUpdate();
+            test.expect(2);
+            test.equal(null, command);
+            test.equal(1, count);
+            test.done();
+        }
+        catch (err) {
             console.log(err);
-          }
-          else {
-            statement.executeQuery(function(err, resultset) {
-              if (err) {
-                console.log(err);
-              } else {
-                test.expect(3);
-                test.equal(null, err);
-                test.ok(resultset);
-                resultset.toObjArray(function(err, results) {
-                  if (err) {
-                    console.log(err);
-                  } else {
-                    test.equal(results.length, 1);
-                    test.done();
-                  }
-                });
-              }
-            });
-          }
-        });
-      }
-    });
-  },
-  testpreparedinsertsettimestamp: function(test) {
-    var myjava = jinst.getInstance();
-    testconn.conn.prepareStatement("INSERT INTO blah (id,name,timestamp) VALUES (4,'Test',?)",function(err, statement) {
-      if (err) {
-        console.log(err);
-      } else {
-        var sqlTimestamp = myjava.newInstanceSync("java.sql.Timestamp", myjava.newLong(testDate));
-        statement.setTimestamp(1, sqlTimestamp, null, function(err) {
-          if (err) {
+        }
+    },
+    testpreparedselectsetdate: async function(test) {
+        try {
+            const myJava = jinst.getInstance();
+            const sqlDate = myJava.newInstanceSync('java.sql.Date', myJava.newLong(testDate));
+            const statement = await testConn.conn.prepareStatement('SELECT * FROM fake WHERE id = 3 AND date = ?');
+            const command = await statement.setDate(1, sqlDate, null);
+            const resultSet = await statement.executeQuery();
+            test.expect(3);
+            test.equal(null, command);
+            test.ok(resultSet);
+            const results = await resultSet.toObjArray();
+            test.equal(results.length, 1);
+            test.done();
+        }
+        catch (err) {
             console.log(err);
-          }
-          else {
-            statement.executeUpdate(function(err, numrows) {
-              if (err) {
-                console.log(err);
-              } else {
-                test.expect(2);
-                test.equal(null, err);
-                test.equal(1,numrows);
-                test.done();
-              }
-            });
-          }
-        });
-      }
-    });
-  },
-  testpreparedselectsettimestamp: function(test) {
-    var myjava = jinst.getInstance();
-    testconn.conn.prepareStatement("SELECT * FROM blah WHERE id = 4 AND timestamp = ?",function(err, statement) {
-      if (err) {
-        console.log(err);
-      } else {
-        var sqlTimestamp = myjava.newInstanceSync("java.sql.Timestamp", myjava.newLong(testDate));
-        statement.setTimestamp(1, sqlTimestamp, null, function(err) {
-          if (err) {
+        }
+    },
+    testpreparedinsertsettimestamp: async function(test) {
+        try {
+            const myJava = jinst.getInstance();
+            const sqlTimestamp = myJava.newInstanceSync('java.sql.Timestamp', myJava.newLong(testDate));
+
+            const statement = await testConn.conn.prepareStatement('INSERT INTO fake (id,name,timestamp) VALUES (4,\'Test\',?)');
+            const command = await statement.setTimestamp(1, sqlTimestamp, null);
+            const count = await statement.executeUpdate();
+            test.expect(2);
+            test.equal(null, command);
+            test.equal(1, count);
+            test.done();
+        }
+        catch (err) {
             console.log(err);
-          }
-          else {
-            statement.executeQuery(function(err, resultset) {
-              if (err) {
-                console.log(err);
-              } else {
-                test.expect(3);
-                test.equal(null, err);
-                test.ok(resultset);
-                resultset.toObjArray(function(err, results) {
-                  if (err) {
-                    console.log(err);
-                  } else {
-                    test.equal(results.length, 1);
-                    test.done();
-                  }
-                });
-              }
-            });
-          }
-        });
-      }
-    });
-  },
-  testdelete: function(test) {
-    testconn.conn.createStatement(function(err, statement) {
-      if (err) {
-        console.log(err);
-      } else {
-        statement.executeUpdate("DELETE FROM blah WHERE id = 2;", function(err, result) {
-          test.expect(2);
-          test.equal(null, err);
-          test.ok(result && result == 1);
-          test.done();
-        });
-      }
-    });
-  },
-  testcancel: function (test) {
-    testconn.conn.createStatement(function (err, statement) {
-      if (err) {
-        console.log(err);
-      } else {
-        statement.cancel(function(err) {
-          test.expect(1);
-          test.equal(null, err);
-          test.done();
-        });
-      }
-    });
-  },
-  testdroptable: function(test) {
-    testconn.conn.createStatement(function(err, statement) {
-      if (err) {
-        console.log(err);
-      } else {
-        statement.executeUpdate("DROP TABLE blah;", function(err, result) {
-          test.expect(2);
-          test.equal(null, err);
-          test.equal(0, result);
-          test.done();
-        });
-      }
-    });
-  }
+        }
+    },
+    testpreparedselectsettimestamp: async function(test) {
+        try {
+            const myJava = jinst.getInstance();
+            const sqlTimestamp = myJava.newInstanceSync('java.sql.Timestamp', myJava.newLong(testDate));
+            const statement = await testConn.conn.prepareStatement('SELECT * FROM fake WHERE id = 4 AND timestamp = ?');
+            const command = await statement.setTimestamp(1, sqlTimestamp, null);
+            const resultSet = await statement.executeQuery();
+            test.expect(3);
+            test.equal(null, command);
+            test.ok(resultSet);
+            const results = await resultSet.toObjArray();
+            test.equal(results.length, 1);
+            test.done();
+        }
+        catch (err) {
+            console.log(err);
+        }
+    },
+    testdelete: async function(test) {
+        try {
+            const statement = await testConn.conn.createStatement();
+            const result = await statement.executeUpdate('DELETE FROM fake WHERE id = 2');
+            test.expect(2);
+            test.equal(1, result);
+            test.ok(result);
+            test.done();
+        }
+        catch (err) {
+            console.log(err);
+        }
+    },
+    testdroptable: async function(test) {
+        try {
+            const statement = await testConn.conn.createStatement();
+            const result = await statement.executeUpdate('DROP TABLE fake');
+            test.expect(1);
+            test.equal(0, result);
+            test.done();
+        }
+        catch (err) {
+            console.log(err);
+        }
+    }
 };

@@ -1,14 +1,7 @@
 var _ = require('lodash');
-var asyncjs = require('async');
-var nodeunit = require('nodeunit');
-var lolex = require("lolex");
-var jinst = require('../lib/jinst');
-var Pool = require('../lib/pool');
-var java = jinst.getInstance();
-var Q = require('q');
-var lolex = require("lolex");
-
-
+const lolex = require("lolex");
+const jinst = require('../lib/jinst');
+const Pool = require('../lib/pool');
 
 if (!jinst.isJvmCreated()) {
   jinst.addOption("-Xrs");
@@ -18,145 +11,152 @@ if (!jinst.isJvmCreated()) {
                         './drivers/derbytools.jar']);
 }
 
-var config = {
+const config = {
   url: 'jdbc:hsqldb:hsql://localhost/xdb',
   user : 'SA',
   password: '',
-  minpoolsize: 1,
-  maxpoolsize: 1
+  minPoolSize: 1,
+  maxPoolSize: 1
 };
 
-var configWithMaxIdle = {
+const configWithMaxIdle = {
   url: 'jdbc:hsqldb:hsql://localhost/xdb',
   user : 'SA',
   password: '',
-  minpoolsize: 1,
-  maxpoolsize: 1,
-  maxidle: 20*60*1000 //20 minutes
+  minPoolSize: 1,
+  maxPoolSize: 1,
+  maxIdle: 20*60*1000 //20 minutes
 };
 
-var configWithMaxIdleAndKeepAlive = {
+const configWithMaxIdleAndKeepAlive = {
   url: 'jdbc:hsqldb:hsql://localhost/xdb',
   user : 'SA',
   password: '',
-  minpoolsize: 1,
-  maxpoolsize: 1,
-  maxidle: 20*60*1000,
-  keepalive: {
+  minPoolSize: 1,
+  maxPoolSize: 1,
+  maxIdle: 20*60*1000,
+  keepAlive: {
     interval: 45*60*1000,
     query: 'select 1',
     enabled: true
   }
 };
 
+let testPool = null;
+let conn1Uuid = null;
+let clock = null;
 
-var testpool = null;
-var conn1Uuid = null;
-var clock = null;
 module.exports = {
-  group1: {
-    setUp: function(callback){
-      clock = lolex.install();
-      testpool = new Pool(config);
+    group1: {
+        setUp: async function(callback) {
+            try {
+                clock = lolex.install();
+                testPool = new Pool(config);
 
-      return Q.ninvoke(testpool, 'reserve')
-          .then(function (conn) {
-            conn1Uuid = conn.uuid;
-            return Q.ninvoke(testpool, 'release', conn);
-          })
-          .then(callback);
-    },
-    tearDown: function(callback) {
-      clock.uninstall();
-      testpool = null;
-      callback();
-    },
-    testreserve_normal: function(test) {
-        clock.tick("20:00");
-        testpool.reserve(function(err, conn) {
-          if (err) {
-            console.log(err);
-          } else {
-            test.expect(4);
-            //expect the same connection to be returned
-            test.equal(conn1Uuid, conn.uuid);
-            test.equal(null, err);
-            test.equal(testpool._pool.length, 0);
-            test.equal(testpool._reserved.length, 1);
-            test.done();
-          }
-        });
-    }
-  },
-  group2: {
-    setUp: function(callback) {
-      clock = lolex.install();
-      testpool = new Pool(configWithMaxIdle);
-
-      return Q.ninvoke(testpool, 'reserve')
-          .then(function(conn) {
-            conn1Uuid = conn.uuid;
-            return Q.ninvoke(testpool, 'release', conn);
-          })
-          .then(callback)
-          .catch(function(e){
-            console.log(e);
-          });
-    },
-    tearDown: function(callback) {
-      clock.uninstall();
-      callback();
-    },
-    testreserve_after_max_idle_time: function(test) {
-      clock.tick("40:00");
-      testpool.reserve(function(err, conn) {
-        if (err) {
-          console.log(err);
-        } else {
-          test.expect(4);
-          //expect a new connection
-          test.notEqual(conn1Uuid, conn.uuid);
-          test.equal(null, err);
-          test.equal(testpool._pool.length, 0);
-          test.equal(testpool._reserved.length, 1);
-          test.done();
+                const conn = await testPool.reserve();
+                conn1Uuid = conn.uuid;
+                await testPool.release(conn);
+            }
+            catch (err) {
+                console.log(err);
+            }
+            finally {
+                callback();
+            }
+        },
+        tearDown: function(callback) {
+            clock.uninstall();
+            testPool = null;
+            callback();
+        },
+        testreserve_normal: async function(test) {
+            try {
+                clock.tick("20:00");
+                const conn = await testPool.reserve();
+                test.expect(3);
+                //expect the same connection to be returned
+                test.equal(conn1Uuid, conn.uuid);
+                test.equal(testPool.pool.length, 0);
+                test.equal(testPool.reserved.length, 1);
+                test.done();
+            }
+            catch (err) {
+                console.log(err);
+            }
         }
-      });
-    }
-  },
-  group3: {
-    setUp: function(callback) {
-      clock = lolex.install();
-
-      testpool = new Pool(configWithMaxIdleAndKeepAlive);
-
-      return Q.ninvoke(testpool, 'reserve')
-        .then(function(conn) {
-          conn1Uuid = conn.uuid;
-          return Q.ninvoke(testpool, 'release', conn);
-        })
-        .then(callback)
-        .catch(callback);
     },
-    tearDown: function(callback) {
-      clock.uninstall();
-      callback();
-    },
-    testreserve_after_max_idle_time_with_keepalive: function(test) {
-      clock.tick("40:00");
-      testpool.reserve(function(err, conn) {
-        if (err) {
-          console.log(err);
-        } else {
-          test.expect(4);
-          //we expect the same connection to be retrieved
-          test.equals(conn1Uuid, conn.uuid);
-          test.equal(null, err);
-          test.equal(testpool._pool.length, 0);
-          test.equal(testpool._reserved.length, 1);
-          test.done();
+    group2: {
+        setUp: async function(callback) {
+            try {
+                clock = lolex.install();
+                testPool = new Pool(configWithMaxIdle);
+
+                const conn = await testPool.reserve();
+                conn1Uuid = conn.uuid;
+                await testPool.release(conn);
+            }
+            catch (err) {
+                console.log(err);
+            }
+            finally {
+                callback();
+            }
+        },
+        tearDown: function(callback) {
+            clock.uninstall();
+            callback();
+        },
+        testreserve_after_max_idle_time: async function(test) {
+            try {
+                clock.tick("40:00");
+                const conn = await testPool.reserve();
+                test.expect(3);
+                //expect a new connection
+                test.notEqual(conn1Uuid, conn.uuid);
+                test.equal(testPool.pool.length, 0);
+                test.equal(testPool.reserved.length, 1);
+                test.done();
+            }
+            catch (err) {
+                console.log(err);
+            }
         }
-      });
+    },
+    group3: {
+        setUp: async function(callback) {
+            try {
+                clock = lolex.install();
+                testPool = new Pool(configWithMaxIdleAndKeepAlive);
+
+                const conn = await testPool.reserve();
+                conn1Uuid = conn.uuid;
+                await testPool.release(conn);
+            }
+            catch (err) {
+                console.log(err);
+            }
+            finally {
+                callback();
+            }
+        },
+        tearDown: function(callback) {
+            clock.uninstall();
+            callback();
+        },
+        testreserve_after_max_idle_time_with_keepalive: async function(test) {
+            try {
+                clock.tick("40:00");
+                const conn = await testPool.reserve();
+                test.expect(3);
+                //we expect the same connection to be retrieved
+                test.equal(conn1Uuid, conn.uuid);
+                test.equal(testPool.pool.length, 0);
+                test.equal(testPool.reserved.length, 1);
+                test.done();
+            }
+            catch (err) {
+                console.log(err);
+            }
+        }
     }
-  }
 };

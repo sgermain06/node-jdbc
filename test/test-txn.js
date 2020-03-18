@@ -1,6 +1,5 @@
-var nodeunit = require('nodeunit');
-var jinst = require('../lib/jinst');
-var JDBC = require('../lib/jdbc');
+const jinst = require('../lib/jinst');
+const JDBC = require('../lib/jdbc');
 
 if (!jinst.isJvmCreated()) {
   jinst.addOption("-Xrs");
@@ -10,153 +9,139 @@ if (!jinst.isJvmCreated()) {
                         './drivers/derbytools.jar']);
 }
 
-var config = {
+const config = {
   url: 'jdbc:derby://localhost:1527/testdb;create=true',
 };
 
-var derby = new JDBC(config);
-var testconn = null;
+const derby = new JDBC(config);
+let testConn = null;
 
 module.exports = {
-  setUp: function(callback) {
-    if (testconn === null && derby._pool.length > 0) {
-      derby.reserve(function(err, conn) {
-        testconn = conn;
-        testconn.conn.setAutoCommit(false, function(err) {
-          callback();
-        });
-      });
-    } else {
-      callback();
-    }
-  },
-  tearDown: function(callback) {
-    if (testconn) {
-      derby.release(testconn, function(err) {
+    setUp: async function(callback) {
+        if (testConn === null && derby.pool.length > 0) {
+            testConn = await derby.reserve();
+        }
         callback();
-      });
-    } else {
-      callback();
+    },
+    tearDown: async function(callback) {
+        if (testConn) {
+            await derby.release(testConn);
+        }
+        callback();
+    },
+    testinitialize: async function(test) {
+        const result = await derby.initialize();
+        test.expect(1);
+        test.equal(null, result);
+        test.done();
+    },
+    testcreatetable: async function(test) {
+        try {
+            const statement = await testConn.conn.createStatement();
+            const result = await statement.executeUpdate('CREATE TABLE fake (id int, name varchar(10), date DATE, time TIME, timestamp TIMESTAMP)');
+            test.expect(2);
+            test.ok(statement);
+            test.equal(0, result);
+            test.done();
+        }
+        catch (err) {
+            console.log(err);
+        }
+    },
+    testinsert: async function(test) {
+        try {
+            const statement = await testConn.conn.createStatement();
+            const result = await statement.executeUpdate('INSERT INTO fake VALUES (1, \'Jason\', CURRENT_DATE, CURRENT_TIME, CURRENT_TIMESTAMP)');
+            test.expect(2);
+            test.equal(1, result);
+            test.ok(result);
+            await testConn.conn.commit();
+            test.done();
+        }
+        catch (err) {
+            console.log(err);
+        }
+    },
+    testupdate: async function(test) {
+        try {
+            const statement = await testConn.conn.createStatement();
+            const result = await statement.executeUpdate('UPDATE fake SET id = 2 WHERE name = \'Jason\'');
+            test.expect(2);
+            test.equal(1, result);
+            test.ok(result);
+            await testConn.conn.commit();
+            test.done();
+        }
+        catch (err) {
+            console.log(err);
+        }
+    },
+    testselect: async function(test) {
+        try {
+            const statement = await testConn.conn.createStatement();
+            const resultSet = await statement.executeQuery('SELECT * FROM fake');
+            test.expect(7);
+            test.ok(statement);
+            test.ok(resultSet);
+            const results = await resultSet.toObjArray();
+            test.equal(results.length, 1);
+            test.equal(results[0].NAME, 'Jason');
+            test.ok(results[0].DATE);
+            test.ok(results[0].TIME);
+            test.ok(results[0].TIMESTAMP);
+            test.done();
+        }
+        catch (err) {
+            console.log(err);
+        }
+    },
+    testdeleterollback: async function(test) {
+        try {
+            // Make sure that we turn off autocommit so we can rollback the delete.
+            const command = await testConn.conn.setAutoCommit(false);
+            const statement = await testConn.conn.createStatement();
+            const result = await statement.executeUpdate('DELETE FROM fake WHERE id = 2');
+            test.expect(4);
+            test.equal(null, command);
+            test.ok(statement);
+            test.equal(1, result);
+            test.ok(result);
+            await testConn.conn.rollback();
+            test.done();
+        }
+        catch (err) {
+            console.log(err);
+        }
+    },
+    testselectpostrollback: async function(test) {
+        try {
+            const statement = await testConn.conn.createStatement();
+            const resultSet = await statement.executeQuery('SELECT * FROM fake');
+            test.expect(7);
+            test.ok(statement);
+            test.ok(resultSet);
+            const results = await resultSet.toObjArray();
+            test.equal(results.length, 1);
+            test.equal(results[0].NAME, 'Jason');
+            test.ok(results[0].DATE);
+            test.ok(results[0].TIME);
+            test.ok(results[0].TIMESTAMP);
+            test.done();
+        }
+        catch (err) {
+            console.log(err);
+        }
+    },
+    testdroptable: async function(test) {
+        try {
+            const statement = await testConn.conn.createStatement();
+            const result = await statement.executeUpdate('DROP TABLE fake');
+            test.expect(1);
+            test.equal(0, result);
+            test.done();
+        }
+        catch (err) {
+            console.log(err);
+        }
     }
-  },
-  testinitialize: function(test) {
-    derby.initialize(function(err) {
-      test.expect(1);
-      test.equal(null, err);
-      test.done();
-    });
-  },
-  testcreatetable: function(test) {
-    testconn.conn.createStatement(function(err, statement) {
-      if (err) {
-        console.log(err);
-      } else {
-        statement.executeUpdate("CREATE TABLE blah (id int, name varchar(10), date DATE, time TIME, timestamp TIMESTAMP)", function(err, result) {
-          test.expect(1);
-          test.equal(null, err);
-          test.done();
-        });
-      }
-    });
-  },
-  testinsert: function(test) {
-    testconn.conn.createStatement(function(err, statement) {
-      if (err) {
-        console.log(err);
-      } else {
-        statement.executeUpdate("INSERT INTO blah VALUES (1, 'Jason', CURRENT_DATE, CURRENT_TIME, CURRENT_TIMESTAMP)", function(err, result) {
-          test.expect(2);
-          test.equal(null, err);
-          test.ok(result && result == 1);
-          testconn.conn.commit(function(err) { if (err) { console.log(err); }});
-          test.done();
-        });
-      }
-    });
-  },
-  testupdate: function(test) {
-    testconn.conn.createStatement(function(err, statement) {
-      if (err) {
-        console.log(err);
-      } else {
-        statement.executeUpdate("UPDATE blah SET id = 2 WHERE name = 'Jason'", function(err, result) {
-          test.expect(2);
-          test.equal(null, err);
-          test.ok(result && result == 1);
-          testconn.conn.commit(function(err) { if (err) { console.log(err); }});
-          test.done();
-        });
-      }
-    });
-  },
-  testselect: function(test) {
-    testconn.conn.createStatement(function(err, statement) {
-      if (err) {
-        console.log(err);
-      } else {
-        statement.executeQuery("SELECT * FROM blah", function(err, resultset) {
-          test.expect(7);
-          test.equal(null, err);
-          test.ok(resultset);
-          resultset.toObjArray(function(err, results) {
-            test.equal(results.length, 1);
-            test.equal(results[0].NAME, 'Jason');
-            test.ok(results[0].DATE);
-            test.ok(results[0].TIME);
-            test.ok(results[0].TIMESTAMP);
-            test.done();
-          });
-        });
-      }
-    });
-  },
-  testdeleterollback: function(test) {
-    testconn.conn.createStatement(function(err, statement) {
-      if (err) {
-        console.log(err);
-      } else {
-        statement.executeUpdate("DELETE FROM blah WHERE id = 2", function(err, result) {
-          test.expect(2);
-          test.equal(null, err);
-          test.ok(result && result == 1);
-          testconn.conn.rollback(function(err) { if (err) { console.log(err); }});
-          test.done();
-        });
-      }
-    });
-  },
-  testselectpostrollback: function(test) {
-    testconn.conn.createStatement(function(err, statement) {
-      if (err) {
-        console.log(err);
-      } else {
-        statement.executeQuery("SELECT * FROM blah", function(err, resultset) {
-          test.expect(7);
-          test.equal(null, err);
-          test.ok(resultset);
-          resultset.toObjArray(function(err, results) {
-            test.equal(results.length, 1);
-            test.equal(results[0].NAME, 'Jason');
-            test.ok(results[0].DATE);
-            test.ok(results[0].TIME);
-            test.ok(results[0].TIMESTAMP);
-            test.done();
-          });
-        });
-      }
-    });
-  },
-  testdroptable: function(test) {
-    testconn.conn.createStatement(function(err, statement) {
-      if (err) {
-        console.log(err);
-      } else {
-        statement.executeUpdate("DROP TABLE blah", function(err, result) {
-          test.expect(1);
-          test.equal(null, err);
-          test.done();
-        });
-      }
-    });
-  }
 };

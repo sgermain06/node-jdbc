@@ -1,7 +1,6 @@
-var nodeunit = require('nodeunit');
-var jinst = require('../lib/jinst');
-var dm = require('../lib/driverManager.js');
-var java = jinst.getInstance();
+const jinst = require('../lib/jinst');
+const dm = require('../lib/driverManager.js');
+const java = jinst.getInstance();
 
 if (!jinst.isJvmCreated()) {
   jinst.addOption("-Xrs");
@@ -11,56 +10,48 @@ if (!jinst.isJvmCreated()) {
                         './drivers/derbytools.jar']);
 }
 
-var config = {
+const config = {
   url: 'jdbc:hsqldb:hsql://localhost/xdb',
   user : 'SA',
   password: ''
 };
 
 module.exports = {
-  testgetconnection: function(test) {
-    dm.getConnection(config.url + ';user=' + config.user + ';password=' + config.password, function(err, conn) {
-      test.expect(2);
-      test.equal(null, err);
-      test.ok(conn);
-      test.done();
-    });
-  },
-  testgetconnectionwithprops: function(test) {
-    var Properties = java.import('java.util.Properties');
-    var props = new Properties();
+    testgetconnection: async function(test) {
+        const connection = await dm.getConnection(config.url + ';user=' + config.user + ';password=' + config.password);
+        test.expect(1);
+        test.ok(connection);
+        test.done();
+    },
+    testgetconnectionwithprops: async function(test) {
+        const Properties = java.import('java.util.Properties');
+        const props = new Properties();
 
-    props.putSync('user', config.user);
-    props.putSync('password', config.password);
+        props.putSync('user', config.user);
+        props.putSync('password', config.password);
 
-    dm.getConnection(config.url, props, function(err, conn) {
-      test.expect(2);
-      test.equal(null, err);
-      test.ok(conn);
-      test.done();
-    });
-  },
-  testgetconnectionwithuserpass: function(test) {
-    dm.getConnection(config.url, config.user, config.password, function(err, conn) {
-      test.expect(2);
-      test.equal(null, err);
-      test.ok(conn);
-      test.done();
-    });
-  },
-  testsetlogintimeout: function(test) {
-    dm.setLoginTimeout(60, function(err) {
-      test.expect(1);
-      test.equals(null, err);
-      test.done();
-    });
-  },
-  testgetlogintimeout: function(test) {
-    dm.getLoginTimeout(function(err, seconds) {
-      test.expect(2);
-      test.ok(seconds);
-      test.equal(60, seconds);
-      test.done();
-    });
-  }
+        const connection = dm.getConnection(config.url, props);
+        test.expect(1);
+        test.ok(connection);
+        test.done();
+    },
+    testgetconnectionwithuserpass: async function(test) {
+        const connection = await dm.getConnection(config.url, config.user, config.password);
+        test.expect(1);
+        test.ok(connection);
+        test.done();
+    },
+    testsetlogintimeout: async function(test) {
+        const timeout = await dm.setLoginTimeout(60);
+        test.expect(1);
+        test.ok(timeout);
+        test.done();
+    },
+    testgetlogintimeout: async function(test) {
+        const seconds = await dm.getLoginTimeout();
+        test.expect(2);
+        test.ok(seconds);
+        test.equal(60, seconds);
+        test.done();
+    }
 };
