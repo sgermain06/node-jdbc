@@ -15,11 +15,11 @@ Please visit [node-jdbc](https://www.npmjs.org/package/jdbc) for information on 
 
 ## Major API Refactor
 
-####ES6 Classes
+#### ES6 Classes
 
 All the code was refactored to use US6 classes.
 
-####Async/Await model
+#### Async/Await model
 
 Converted everything to using sync methods on the JDBC drivers and wrapped everything in promises. This has for effect
 to eliminate the crazy trees of callbacks and makes for much more readable and manageable code.
@@ -27,11 +27,11 @@ to eliminate the crazy trees of callbacks and makes for much more readable and m
 Another main reason for converting everything to calling sync methods is that the callbacks were never being called
 when using older drivers (needed to use Hive 1.21 JAR). This way, everything works and remains asynchronous.
 
-####Eliminated need for AsyncJS
+#### Eliminated need for AsyncJS
 
 Using promises makes it easier for things to be chained without needing to use AsyncJS. Refactored the code to eliminate this dependency.
 
-####One Instance to Rule Them All (JVM)
+#### One Instance to Rule Them All (JVM)
 
 [node-java](https://github.com/joeferner/node-java) spins up one JVM instance only.  Due to this fact, any JVM options
 and classpath setup have to happen before the first java call.  I've created a
@@ -59,7 +59,7 @@ if (!jinst.isJvmCreated()) {
 ```
 
 
-####Connection Pooling
+#### Connection Pooling
 
 Everyone gets a pool now.  By default with no extra configuration, the pool
 is created with one connection that can be reserved/released.  Currently, the
@@ -167,7 +167,7 @@ module.exports = {
 };
 ```
 
-####Fully Wrapped Connection API
+#### Fully Wrapped Connection API
 
 The Java Connection API has almost been completely wrapped.  See
 [connection.js](https://github.com/sgermain06/node-jdbc/blob/master/lib/connection.js)
@@ -182,7 +182,7 @@ catch (err) {
 }
 ```
 
-####ResultSet processing separated from statement execution
+#### ResultSet processing separated from statement execution
 
 `ResultSet` processing has been separated from statement execution to allow for
 more flexibility.  The ResultSet returned from executing a select query can
@@ -204,7 +204,7 @@ catch (err) {
 }
 ```
 
-####Automatically Closing Idle Connections
+#### Automatically Closing Idle Connections
 
 If you pass a `maxIdle` property in the config for a new connection pool,
 `pool.reserve()` will close stale connections, and will return a sufficiently fresh connection, or a new connection.  `maxIdle` can be number representing the maximum number of milliseconds since a connection was last used, that a connection is still considered alive (without making an extra call to the database to check that the connection is valid).  If `maxIdle` is a falsy value or is absent from the config, this feature does not come into effect.  This feature is useful, when connections are automatically closed from the server side after a certain period of time, and when it is not appropriate to use the connection keepalive feature.
